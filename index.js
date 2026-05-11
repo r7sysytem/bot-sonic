@@ -1,22 +1,14 @@
 const {
-Client,
-GatewayIntentBits,
-ActionRowBuilder,
-StringSelectMenuBuilder,
-ButtonBuilder,
-ButtonStyle,
-EmbedBuilder,
-PermissionsBitField,
-ChannelType
+  Client,
+  GatewayIntentBits,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  PermissionsBitField,
+  ChannelType
 } = require("discord.js");
-
-const client = new Client({
-intents: [
-GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMessages,
-GatewayIntentBits.MessageContent
-]
-});
 
 const TOKEN = process.env.TOKEN;
 
@@ -26,335 +18,285 @@ const CATEGORY_ID = "1486641827552428043";
 
 const claimedTickets = new Map();
 
-client.once("ready", () => {
-console.log(`${client.user.tag} Online`);
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
+
+client.once("ready", function () {
+  console.log("Bot is online: " + client.user.tag);
 });
 
 function isStaff(member) {
-return member.roles.cache.has(STAFF_ROLE_ID);
+  return member.roles.cache.has(STAFF_ROLE_ID);
 }
 
 function isHighStaff(member) {
-return member.roles.cache.has(HIGH_STAFF_ROLE_ID);
+  return member.roles.cache.has(HIGH_STAFF_ROLE_ID);
 }
 
-client.on("messageCreate", async (message) => {
-
-if (message.author.bot) return;
-
-// إرسال بانل التكت
-if (message.content === "تكت") {
-
-const embed = new EmbedBuilder()
-.setTitle("📮 نظام الدعم الفني")
-.setDescription(`
-# أهلاً بك في الدعم الفني
-
-> اختر نوع التذكرة من القائمة بالأسفل
-
-⚠️ القوانين:
-• يمنع السب والإزعاج
-• يمنع فتح تذكرة بدون سبب
-• أسرع إداري يستلم التذكرة يصبح المسؤول عنها
-• الإدارة العليا تستطيع التدخل بأي وقت
-`)
-.setColor("#a855f7")
-.setImage("https://media.discordapp.net/attachments/132/example.gif");
-
-const menu =
-new StringSelectMenuBuilder()
-.setCustomId("ticket_menu")
-.setPlaceholder("اختر نوع التذكرة")
-.addOptions([
-{
-label: "دعم فني",
-description: "فتح تذكرة دعم",
-value: "support",
-emoji: "📮"
-}
-]);
-
-const row =
-new ActionRowBuilder().addComponents(menu);
-
-return message.channel.send({
-embeds: [embed],
-components: [row]
-});
+function isTicket(channel) {
+  return channel.name.startsWith("ticket-");
 }
 
-// تغيير الاسم
-if (message.content.startsWith("+rename")) {
+client.on("messageCreate", async function (message) {
+  if (message.author.bot) return;
 
-if (!message.channel.name.startsWith("🎫・")) return;
+  if (message.content.trim() === "تكت") {
+    const embed = new EmbedBuilder()
+      .setTitle("📮 نظام الدعم الفني")
+      .setDescription(
+        "أهلاً بك في الدعم الفني.\n\n" +
+        "اختر نوع التذكرة من القائمة بالأسفل.\n\n" +
+        "⚠️ القوانين:\n" +
+        "• يمنع السب والإزعاج.\n" +
+        "• يمنع فتح تذكرة بدون سبب.\n" +
+        "• أسرع إداري يستلم التذكرة يصبح المسؤول عنها.\n" +
+        "• الإدارة العليا تستطيع التدخل بأي وقت."
+      )
+      .setColor("#a855f7");
 
-if (!isStaff(message.member) && !isHighStaff(message.member)) {
-return;
-}
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId("ticket_menu")
+      .setPlaceholder("اختر نوع التذكرة")
+      .addOptions([
+        {
+          label: "دعم فني",
+          description: "فتح تذكرة دعم",
+          value: "support",
+          emoji: "📮"
+        }
+      ]);
 
-const newName =
-message.content.replace("+rename", "").trim();
+    return message.channel.send({
+      embeds: [embed],
+      components: [new ActionRowBuilder().addComponents(menu)]
+    });
+  }
 
-if (!newName) {
-return message.reply("❌ اكتب الاسم");
-}
+  if (message.content.startsWith("+rename")) {
+    if (!isTicket(message.channel)) return;
 
-await message.channel.setName(`🎫・${newName}`);
+    if (!isStaff(message.member) && !isHighStaff(message.member)) {
+      return message.reply("❌ هذا الأمر للإدارة فقط.");
+    }
 
-message.reply(`✅ تم تغيير الاسم إلى ${newName}`);
-}
+    const newName = message.content.replace("+rename", "").trim();
 
-// إضافة عضو
-if (message.content.startsWith("+add")) {
+    if (!newName) {
+      return message.reply("❌ اكتب الاسم الجديد.");
+    }
 
-if (!message.channel.name.startsWith("🎫・")) return;
+    await message.channel.setName("ticket-" + newName).catch(function () {});
+    return message.reply("✅ تم تغيير اسم التكت إلى: ticket-" + newName);
+  }
 
-if (!isStaff(message.member) && !isHighStaff(message.member)) {
-return;
-}
+  if (message.content.startsWith("+add")) {
+    if (!isTicket(message.channel)) return;
 
-const user =
-message.mentions.users.first();
+    if (!isStaff(message.member) && !isHighStaff(message.member)) {
+      return message.reply("❌ هذا الأمر للإدارة فقط.");
+    }
 
-if (!user) {
-return message.reply("❌ منشن الشخص");
-}
+    const user = message.mentions.users.first();
 
-await message.channel.permissionOverwrites.edit(user.id, {
-ViewChannel: true,
-SendMessages: true,
-ReadMessageHistory: true
-});
+    if (!user) {
+      return message.reply("❌ منشن الشخص. مثال: +add @user");
+    }
 
-message.reply(`✅ تم إضافة ${user}`);
-}
+    await message.channel.permissionOverwrites.edit(user.id, {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true
+    });
 
-// قفل التكت
-if (message.content === "?close") {
+    return message.reply("✅ تم إضافة " + user.toString() + " للتكت.");
+  }
 
-if (!message.channel.name.startsWith("🎫・")) return;
+  if (message.content.trim() === "?close") {
+    if (!isTicket(message.channel)) return;
 
-if (!isStaff(message.member) && !isHighStaff(message.member)) {
-return;
-}
+    if (!isStaff(message.member) && !isHighStaff(message.member)) {
+      return message.reply("❌ هذا الأمر للإدارة فقط.");
+    }
 
-message.channel.send("🔒 سيتم إغلاق التذكرة خلال 5 ثواني");
+    await message.reply("🔒 سيتم إغلاق التكت خلال 5 ثواني...");
 
-setTimeout(() => {
-claimedTickets.delete(message.channel.id);
-message.channel.delete().catch(() => {});
-}, 5000);
-}
-
+    setTimeout(function () {
+      claimedTickets.delete(message.channel.id);
+      message.channel.delete().catch(function () {});
+    }, 5000);
+  }
 });
 
-// التفاعل
-client.on("interactionCreate", async (interaction) => {
+client.on("interactionCreate", async function (interaction) {
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === "ticket_menu") {
+      if (interaction.values[0] !== "support") return;
 
-if (interaction.isStringSelectMenu()) {
+      const oldTicket = interaction.guild.channels.cache.find(function (channel) {
+        return channel.name === "ticket-" + interaction.user.id;
+      });
 
-if (interaction.customId === "ticket_menu") {
+      if (oldTicket) {
+        return interaction.reply({
+          content: "❌ عندك تكت مفتوح بالفعل: " + oldTicket.toString(),
+          ephemeral: true
+        });
+      }
 
-const oldTicket =
-interaction.guild.channels.cache.find(
-c => c.name === 🎫・${interaction.user.username}
-);
+      const ticket = await interaction.guild.channels.create({
+        name: "ticket-" + interaction.user.id,
+        type: ChannelType.GuildText,
+        parent: CATEGORY_ID,
+        permissionOverwrites: [
+          {
+            id: interaction.guild.id,
+            deny: [PermissionsBitField.Flags.ViewChannel]
+          },
+          {
+            id: interaction.user.id,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.ReadMessageHistory
+            ]
+          },
+          {
+            id: STAFF_ROLE_ID,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.ReadMessageHistory
+            ],
+            deny: [
+              PermissionsBitField.Flags.SendMessages
+            ]
+          },
+          {
+            id: HIGH_STAFF_ROLE_ID,
+            allow: [
+              PermissionsBitField.Flags.ViewChannel,
+              PermissionsBitField.Flags.SendMessages,
+              PermissionsBitField.Flags.ReadMessageHistory,
+              PermissionsBitField.Flags.ManageMessages
+            ]
+          }
+        ]
+      });
 
-if (oldTicket) {
+      const ticketEmbed = new EmbedBuilder()
+        .setTitle("🎫 تم فتح التذكرة")
+        .setDescription(
+          "مرحباً " + interaction.user.toString() + "\n\n" +
+          "يرجى شرح مشكلتك بالتفصيل.\n\n" +
+          "━━━━━━━━━━━━━━\n\n" +
+          "⚡ أسرع إداري يستلم التذكرة يصبح المسؤول عنها.\n" +
+          "🔒 الإدارة الصغرى لا تستطيع الكتابة إلا بعد الاستلام.\n" +
+          "👑 الإدارة العليا تستطيع الكتابة دائماً.\n\n" +
+          "🛠️ أوامر الإدارة:\n" +
+          "+rename الاسم\n" +
+          "+add @user\n" +
+          "?close\n\n" +
+          "━━━━━━━━━━━━━━"
+        )
+        .setColor("#8b5cf6");
 
-return interaction.reply({
-content: ❌ عندك تكت مفتوح بالفعل ${oldTicket},
-ephemeral: true
-});
-}
+      const buttons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("claim")
+          .setLabel("استلام")
+          .setEmoji("✅")
+          .setStyle(ButtonStyle.Success),
 
-const ticket =
-await interaction.guild.channels.create({
+        new ButtonBuilder()
+          .setCustomId("close")
+          .setLabel("قفل")
+          .setEmoji("🔒")
+          .setStyle(ButtonStyle.Danger)
+      );
 
-name: 🎫・${interaction.user.username},
+      await ticket.send({
+        content: "<@&" + STAFF_ROLE_ID + "> <@&" + HIGH_STAFF_ROLE_ID + ">",
+        embeds: [ticketEmbed],
+        components: [buttons]
+      });
 
-type: ChannelType.GuildText,
+      return interaction.reply({
+        content: "✅ تم فتح التذكرة: " + ticket.toString(),
+        ephemeral: true
+      });
+    }
+  }
 
-parent: CATEGORY_ID,
+  if (interaction.isButton()) {
+    if (interaction.customId === "claim") {
+      if (!isStaff(interaction.member) && !isHighStaff(interaction.member)) {
+        return interaction.reply({
+          content: "❌ هذا الزر للإدارة فقط.",
+          ephemeral: true
+        });
+      }
 
-permissionOverwrites: [
+      if (claimedTickets.has(interaction.channel.id)) {
+        const claimerId = claimedTickets.get(interaction.channel.id);
 
-{
-id: interaction.guild.id,
-deny: [PermissionsBitField.Flags.ViewChannel]
-},
+        return interaction.reply({
+          content: "❌ التذكرة مستلمة بالفعل بواسطة <@" + claimerId + ">",
+          ephemeral: true
+        });
+      }
 
-{
-id: interaction.user.id,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.SendMessages,
-PermissionsBitField.Flags.ReadMessageHistory
-]
-},
+      claimedTickets.set(interaction.channel.id, interaction.user.id);
 
-// الإدارة الصغرى تشوف فقط
-{
-id: STAFF_ROLE_ID,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.ReadMessageHistory
-],
-deny: [
-PermissionsBitField.Flags.SendMessages
-]
-},
+      await interaction.channel.permissionOverwrites.edit(interaction.user.id, {
+        ViewChannel: true,
+        SendMessages: true,
+        ReadMessageHistory: true,
+        ManageMessages: true
+      });
 
-// الإدارة العليا تتكلم دائم
-{
-id: HIGH_STAFF_ROLE_ID,
-allow: [
-PermissionsBitField.Flags.ViewChannel,
-PermissionsBitField.Flags.SendMessages,
-PermissionsBitField.Flags.ReadMessageHistory,
-PermissionsBitField.Flags.ManageMessages
-]
-}
+      await interaction.channel.permissionOverwrites.edit(STAFF_ROLE_ID, {
+        ViewChannel: true,
+        SendMessages: false,
+        ReadMessageHistory: true
+      });
 
-]
+      const claimEmbed = new EmbedBuilder()
+        .setTitle("✅ تم استلام التذكرة")
+        .setDescription(
+          "تم استلام التذكرة بواسطة " + interaction.user.toString() + "\n\n" +
+          "هذا الإداري أصبح المسؤول عن التذكرة.\n" +
+          "لا يمكن لأي إداري آخر استلامها."
+        )
+        .setColor("#22c55e");
 
-});const embed =
-new EmbedBuilder()
-.setTitle("🎫 تم فتح التذكرة")
-.setDescription(`
-مرحباً ${interaction.user}
+      return interaction.reply({
+        embeds: [claimEmbed],
+        ephemeral: false
+      });
+    }
 
-يرجى شرح مشكلتك بالتفصيل.
+    if (interaction.customId === "close") {
+      if (!isStaff(interaction.member) && !isHighStaff(interaction.member)) {
+        return interaction.reply({content: "❌ الإدارة فقط تقدر تقفل التكت.",
+          ephemeral: true
+        });
+      }
 
-━━━━━━━━━━━━━━
+      await interaction.reply({
+        content: "🔒 سيتم إغلاق التكت خلال 5 ثواني...",
+        ephemeral: false
+      });
 
-⚡ أسرع إداري يستلم التذكرة يصبح المسؤول عنها
-
-🛠️ أوامر الإدارة:
-
-+rename الاسم
-+add @user
-?close
-
-━━━━━━━━━━━━━━
-`)
-.setColor("#8b5cf6");
-
-const buttons =
-new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("claim")
-.setLabel("استلام")
-.setEmoji("✅")
-.setStyle(ButtonStyle.Success),
-
-new ButtonBuilder()
-.setCustomId("close")
-.setLabel("قفل")
-.setEmoji("🔒")
-.setStyle(ButtonStyle.Danger)
-
-);
-
-await ticket.send({
-content:
-<@&${STAFF_ROLE_ID}> <@&${HIGH_STAFF_ROLE_ID}>,
-embeds: [embed],
-components: [buttons]
-});
-
-interaction.reply({
-content: ✅ تم فتح التذكرة ${ticket},
-ephemeral: true
-});
-}
-}
-
-// الأزرار
-if (interaction.isButton()) {
-
-// استلام
-if (interaction.customId === "claim") {
-
-if (!isStaff(interaction.member) &&
-!isHighStaff(interaction.member)) {
-
-return interaction.reply({
-content: "❌ للإدارة فقط",
-ephemeral: true
-});
-}
-
-// إذا مستلمة
-if (claimedTickets.has(interaction.channel.id)) {
-
-const claimer =
-claimedTickets.get(interaction.channel.id);
-
-return interaction.reply({
-content:
-❌ التذكرة مستلمة بالفعل بواسطة <@${claimer}>,
-ephemeral: true
-});
-}
-
-// حفظ المستلم
-claimedTickets.set(
-interaction.channel.id,
-interaction.user.id
-);
-
-// السماح للمستلم فقط
-await interaction.channel.permissionOverwrites.edit(
-interaction.user.id,
-{
-SendMessages: true,
-ViewChannel: true,
-ReadMessageHistory: true
-}
-);
-
-const embed =
-new EmbedBuilder()
-.setTitle("✅ تم استلام التذكرة")
-.setDescription(`
-👤 الإدارة:
-${interaction.user}
-
-⚡ هذا الإداري أصبح المسؤول عن التذكرة
-
-• لا يمكن لأي إداري آخر استلامها
-`)
-.setColor("#22c55e");
-
-interaction.reply({
-embeds: [embed]
-});
-}
-
-// قفل
-if (interaction.customId === "close") {
-
-if (!isStaff(interaction.member) &&
-!isHighStaff(interaction.member)) {
-
-return;
-}
-
-interaction.channel.send(
-"🔒 سيتم إغلاق التذكرة خلال 5 ثواني"
-);
-
-setTimeout(() => {
-claimedTickets.delete(interaction.channel.id);
-interaction.channel.delete().catch(() => {});
-}, 5000);
-
-}
-
-}
-
+      setTimeout(function () {
+        claimedTickets.delete(interaction.channel.id);
+        interaction.channel.delete().catch(function () {});
+      }, 5000);
+    }
+  }
 });
 
 client.login(TOKEN);
