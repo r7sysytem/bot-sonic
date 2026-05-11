@@ -1,290 +1,360 @@
 const {
-  Client,
-  GatewayIntentBits,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  EmbedBuilder,
-  ChannelType,
-  PermissionsBitField
+Client,
+GatewayIntentBits,
+ActionRowBuilder,
+StringSelectMenuBuilder,
+ButtonBuilder,
+ButtonStyle,
+EmbedBuilder,
+PermissionsBitField,
+ChannelType
 } = require("discord.js");
+
+const client = new Client({
+intents: [
+GatewayIntentBits.Guilds,
+GatewayIntentBits.GuildMessages,
+GatewayIntentBits.MessageContent
+]
+});
 
 const TOKEN = process.env.TOKEN;
 
 const STAFF_ROLE_ID = "1494276329825374269";
-const TICKET_CATEGORY_ID = "1486641827552428043";
+const HIGH_STAFF_ROLE_ID = "1494276545643282482";
+const CATEGORY_ID = "1486641827552428043";
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
+const claimedTickets = new Map();
 
-client.once("ready", function () {
-  console.log("Bot is ready: " + client.user.tag);
+client.once("ready", () => {
+console.log(`${client.user.tag} Online`);
 });
 
 function isStaff(member) {
-  return member.roles.cache.has(STAFF_ROLE_ID);
+return member.roles.cache.has(STAFF_ROLE_ID);
 }
 
-client.on("messageCreate", async function (message) {
-  if (message.author.bot) return;
+function isHighStaff(member) {
+return member.roles.cache.has(HIGH_STAFF_ROLE_ID);
+}
 
-  if (message.content.trim() === "تكت") {
-    const embed = new EmbedBuilder()
-      .setTitle("📮 الدعم الفني")
-      .setDescription(
-        "أهلاً بك في الدعم الفني الخاص بالسيرفر.\n\n" +
-        "يرجى قبل فتح التذكرة مراجعة القوانين.\n" +
-        "عدم احترام الإدارة أو التقليل منهم لأي سبب يؤدي إلى المحاسبة.\n\n" +
-        "اضغط على القائمة بالأسفل واختر دعم فني."
-      )
-      .setColor("#8b5cf6");
+client.on("messageCreate", async (message) => {
 
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("ticket_menu")
-      .setPlaceholder("اختر من هنا")
-      .addOptions([
-        {
-          label: "دعم فني",
-          description: "اضغط لفتح تكت دعم فني",
-          value: "support_ticket",
-          emoji: "⚙️"
-        }
-      ]);
+if (message.author.bot) return;
 
-    return message.channel.send({
-      embeds: [embed],
-      components: [new ActionRowBuilder().addComponents(menu)]
-    });
-  }
+// إرسال بانل التكت
+if (message.content === "تكت") {
 
-  if (message.content.startsWith("+rename")) {
-    if (!message.channel.name.startsWith("ticket-")) return;
-    if (!isStaff(message.member)) return message.reply("❌ هذا الأمر للإدارة فقط.");
+const embed = new EmbedBuilder()
+.setTitle("📮 نظام الدعم الفني")
+.setDescription(`
+# أهلاً بك في الدعم الفني
 
-    const newName = message.content.replace("+rename", "").trim();
-    if (!newName) return message.reply("❌ اكتب الاسم الجديد بعد الأمر.");
+> اختر نوع التذكرة من القائمة بالأسفل
 
-    await message.channel.setName(newName).catch(function () {});
-    return message.reply("✅ تم تغيير اسم التكت إلى: " + newName);
-  }
+⚠️ القوانين:
+• يمنع السب والإزعاج
+• يمنع فتح تذكرة بدون سبب
+• أسرع إداري يستلم التذكرة يصبح المسؤول عنها
+• الإدارة العليا تستطيع التدخل بأي وقت
+`)
+.setColor("#a855f7")
+.setImage("https://media.discordapp.net/attachments/132/example.gif");
 
-  if (message.content.trim() === "?close") {
-    if (!message.channel.name.startsWith("ticket-")) return;
-    if (!isStaff(message.member)) return message.reply("❌ هذا الأمر للإدارة فقط.");
+const menu =
+new StringSelectMenuBuilder()
+.setCustomId("ticket_menu")
+.setPlaceholder("اختر نوع التذكرة")
+.addOptions([
+{
+label: "دعم فني",
+description: "فتح تذكرة دعم",
+value: "support",
+emoji: "📮"
+}
+]);
 
-    await message.reply("🔒 سيتم إغلاق التكت خلال 5 ثواني...");
-    setTimeout(function () {
-      message.channel.delete().catch(function () {});
-    }, 5000);
-  }
+const row =
+new ActionRowBuilder().addComponents(menu);
+
+return message.channel.send({
+embeds: [embed],
+components: [row]
+});
+}
+
+// تغيير الاسم
+if (message.content.startsWith("+rename")) {
+
+if (!message.channel.name.startsWith("🎫・")) return;
+
+if (!isStaff(message.member) && !isHighStaff(message.member)) {
+return;
+}
+
+const newName =
+message.content.replace("+rename", "").trim();
+
+if (!newName) {
+return message.reply("❌ اكتب الاسم");
+}
+
+await message.channel.setName(`🎫・${newName}`);
+
+message.reply(`✅ تم تغيير الاسم إلى ${newName}`);
+}
+
+// إضافة عضو
+if (message.content.startsWith("+add")) {
+
+if (!message.channel.name.startsWith("🎫・")) return;
+
+if (!isStaff(message.member) && !isHighStaff(message.member)) {
+return;
+}
+
+const user =
+message.mentions.users.first();
+
+if (!user) {
+return message.reply("❌ منشن الشخص");
+}
+
+await message.channel.permissionOverwrites.edit(user.id, {
+ViewChannel: true,
+SendMessages: true,
+ReadMessageHistory: true
 });
 
-client.on("interactionCreate", async function (interaction) {
-  if (interaction.isStringSelectMenu()) {
-    if (interaction.customId === "ticket_menu") {
-      if (interaction.values[0] !== "support_ticket") return;
+message.reply(`✅ تم إضافة ${user}`);
+}
 
-      const oldChannel = interaction.guild.channels.cache.find(function (ch) {
-        return ch.name === "ticket-" + interaction.user.id;
-      });
+// قفل التكت
+if (message.content === "?close") {
 
-      if (oldChannel) {
-        return interaction.reply({
-          content: "❌ عندك تكت مفتوح بالفعل: " + oldChannel.toString(),
-          ephemeral: true
-        });
-      }
+if (!message.channel.name.startsWith("🎫・")) return;
 
-      const ticketChannel = await interaction.guild.channels.create({
-        name: "ticket-" + interaction.user.id,
-        type: ChannelType.GuildText,
-        parent: TICKET_CATEGORY_ID,
-        permissionOverwrites: [
-          {
-            id: interaction.guild.id,
-            deny: [PermissionsBitField.Flags.ViewChannel]
-          },
-          {
-            id: interaction.user.id,
-            allow: [
-              PermissionsBitField.Flags.ViewChannel,
-              PermissionsBitField.Flags.SendMessages,
-              PermissionsBitField.Flags.ReadMessageHistory
-            ]
-          },
-          {
-            id: STAFF_ROLE_ID,
-            allow: [
-              PermissionsBitField.Flags.ViewChannel,
-              PermissionsBitField.Flags.SendMessages,
-              PermissionsBitField.Flags.ReadMessageHistory,
-              PermissionsBitField.Flags.ManageMessages,
-              PermissionsBitField.Flags.ManageChannels
-            ]
-          }
-        ]
-      });
+if (!isStaff(message.member) && !isHighStaff(message.member)) {
+return;
+}
 
-      const ticketEmbed = new EmbedBuilder()
-        .setTitle("🎫 أهلاً بك في الدعم الفني")
-        .setDescription("<@" + interaction.user.id + "> | <@&" + STAFF_ROLE_ID + ">\n\n" +
-          "يرجى الانتظار، سيتم خدمتك من قبل الإدارة قريباً.\n\n" +
-          "أوامر الإدارة:\n" +
-          "+rename الاسم\n" +
-          "?close"
-        )
-        .setColor("#8b5cf6");
+message.channel.send("🔒 سيتم إغلاق التذكرة خلال 5 ثواني");
 
-      const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("claim_ticket")
-          .setLabel("استلام")
-          .setEmoji("✅")
-          .setStyle(ButtonStyle.Success),
+setTimeout(() => {
+claimedTickets.delete(message.channel.id);
+message.channel.delete().catch(() => {});
+}, 5000);
+}
 
-        new ButtonBuilder()
-          .setCustomId("close_ticket")
-          .setLabel("قفل")
-          .setEmoji("🔒")
-          .setStyle(ButtonStyle.Danger)
-      );
+});
 
-      const controlMenu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId("admin_panel")
-          .setPlaceholder("لوحة تحكم الإدارة")
-          .addOptions([
-            {
-              label: "تنبيه العضو",
-              description: "إرسال تنبيه داخل التكت",
-              value: "warn_user",
-              emoji: "⚠️"
-            },
-            {
-              label: "تغيير اسم التكت",
-              description: "طريقة تغيير اسم التكت",
-              value: "rename_info",
-              emoji: "✏️"
-            },
-            {
-              label: "قفل التكت",
-              description: "إغلاق التذكرة",
-              value: "close_ticket_menu",
-              emoji: "🔒"
-            },
-            {
-              label: "معلومات التكت",
-              description: "عرض معلومات التذكرة",
-              value: "ticket_info",
-              emoji: "📌"
-            }
-          ])
-      );
+// التفاعل
+client.on("interactionCreate", async (interaction) => {
 
-      await ticketChannel.send({
-        content: "<@&" + STAFF_ROLE_ID + ">",
-        embeds: [ticketEmbed],
-        components: [buttons, controlMenu]
-      });
+if (interaction.isStringSelectMenu()) {
 
-      return interaction.reply({
-        content: "✅ تم فتح التكت: " + ticketChannel.toString(),
-        ephemeral: true
-      });
-    }
+if (interaction.customId === "ticket_menu") {
 
-    if (interaction.customId === "admin_panel") {
-      if (!isStaff(interaction.member)) {
-        return interaction.reply({
-          content: "❌ هذا الخيار للإدارة فقط.",
-          ephemeral: true
-        });
-      }
+const oldTicket =
+interaction.guild.channels.cache.find(
+c => c.name === 🎫・${interaction.user.username}
+);
 
-      const value = interaction.values[0];
+if (oldTicket) {
 
-      if (value === "warn_user") {
-        return interaction.reply({
-          content: "⚠️ يرجى من صاحب التذكرة توضيح طلبه والانتظار حتى يتم الرد عليه.",
-          ephemeral: false
-        });
-      }
+return interaction.reply({
+content: ❌ عندك تكت مفتوح بالفعل ${oldTicket},
+ephemeral: true
+});
+}
 
-      if (value === "rename_info") {
-        return interaction.reply({
-          content: "✏️ لتغيير اسم التكت اكتب:\n+rename الاسم-الجديد",
-          ephemeral: true
-        });
-      }
+const ticket =
+await interaction.guild.channels.create({
 
-      if (value === "close_ticket_menu") {
-        await interaction.reply({
-          content: "🔒 سيتم إغلاق التكت خلال 5 ثواني...",
-          ephemeral: false
-        });
+name: 🎫・${interaction.user.username},
 
-        return setTimeout(function () {
-          interaction.channel.delete().catch(function () {});
-        }, 5000);
-      }
+type: ChannelType.GuildText,
 
-      if (value === "ticket_info") {
-        return interaction.reply({
-          content:
-            "📌 معلومات التكت:\n" +
-            "الروم: " + interaction.channel.toString() + "\n" +
-            "الإدارة: <@&" + STAFF_ROLE_ID + ">\n" +
-            "للإغلاق: ?close\n" +
-            "لتغيير الاسم: +rename الاسم",
-          ephemeral: true
-        });
-      }
-    }
-  }
+parent: CATEGORY_ID,
 
-  if (interaction.isButton()) {
-    if (interaction.customId === "claim_ticket") {
-      if (!isStaff(interaction.member)) {
-        return interaction.reply({
-          content: "❌ هذا الزر للإدارة فقط.",
-          ephemeral: true
-        });
-      }
+permissionOverwrites: [
 
-      const embed = new EmbedBuilder()
-        .setTitle("✅ تم استلام التذكرة")
-        .setDescription("تم استلام التذكرة بواسطة " + interaction.user.toString())
-        .setColor("#22c55e");
+{
+id: interaction.guild.id,
+deny: [PermissionsBitField.Flags.ViewChannel]
+},
 
-      return interaction.reply({
-        embeds: [embed],
-        ephemeral: false
-      });
-    }
+{
+id: interaction.user.id,
+allow: [
+PermissionsBitField.Flags.ViewChannel,
+PermissionsBitField.Flags.SendMessages,
+PermissionsBitField.Flags.ReadMessageHistory
+]
+},
 
-    if (interaction.customId === "close_ticket") {
-      if (!isStaff(interaction.member)) {
-        return interaction.reply({
-          content: "❌ الإدارة فقط تقدر تقفل التكت.",
-          ephemeral: true
-        });
-      }
+// الإدارة الصغرى تشوف فقط
+{
+id: STAFF_ROLE_ID,
+allow: [
+PermissionsBitField.Flags.ViewChannel,
+PermissionsBitField.Flags.ReadMessageHistory
+],
+deny: [
+PermissionsBitField.Flags.SendMessages
+]
+},
 
-      await interaction.reply({content: "🔒 سيتم قفل التذكرة خلال 5 ثواني...",
-        ephemeral: false
-      });
+// الإدارة العليا تتكلم دائم
+{
+id: HIGH_STAFF_ROLE_ID,
+allow: [
+PermissionsBitField.Flags.ViewChannel,
+PermissionsBitField.Flags.SendMessages,
+PermissionsBitField.Flags.ReadMessageHistory,
+PermissionsBitField.Flags.ManageMessages
+]
+}
 
-      setTimeout(function () {
-        interaction.channel.delete().catch(function () {});
-      }, 5000);
-    }
-  }
+]
+
+});const embed =
+new EmbedBuilder()
+.setTitle("🎫 تم فتح التذكرة")
+.setDescription(`
+مرحباً ${interaction.user}
+
+يرجى شرح مشكلتك بالتفصيل.
+
+━━━━━━━━━━━━━━
+
+⚡ أسرع إداري يستلم التذكرة يصبح المسؤول عنها
+
+🛠️ أوامر الإدارة:
+
++rename الاسم
++add @user
+?close
+
+━━━━━━━━━━━━━━
+`)
+.setColor("#8b5cf6");
+
+const buttons =
+new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("claim")
+.setLabel("استلام")
+.setEmoji("✅")
+.setStyle(ButtonStyle.Success),
+
+new ButtonBuilder()
+.setCustomId("close")
+.setLabel("قفل")
+.setEmoji("🔒")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+await ticket.send({
+content:
+<@&${STAFF_ROLE_ID}> <@&${HIGH_STAFF_ROLE_ID}>,
+embeds: [embed],
+components: [buttons]
+});
+
+interaction.reply({
+content: ✅ تم فتح التذكرة ${ticket},
+ephemeral: true
+});
+}
+}
+
+// الأزرار
+if (interaction.isButton()) {
+
+// استلام
+if (interaction.customId === "claim") {
+
+if (!isStaff(interaction.member) &&
+!isHighStaff(interaction.member)) {
+
+return interaction.reply({
+content: "❌ للإدارة فقط",
+ephemeral: true
+});
+}
+
+// إذا مستلمة
+if (claimedTickets.has(interaction.channel.id)) {
+
+const claimer =
+claimedTickets.get(interaction.channel.id);
+
+return interaction.reply({
+content:
+❌ التذكرة مستلمة بالفعل بواسطة <@${claimer}>,
+ephemeral: true
+});
+}
+
+// حفظ المستلم
+claimedTickets.set(
+interaction.channel.id,
+interaction.user.id
+);
+
+// السماح للمستلم فقط
+await interaction.channel.permissionOverwrites.edit(
+interaction.user.id,
+{
+SendMessages: true,
+ViewChannel: true,
+ReadMessageHistory: true
+}
+);
+
+const embed =
+new EmbedBuilder()
+.setTitle("✅ تم استلام التذكرة")
+.setDescription(`
+👤 الإدارة:
+${interaction.user}
+
+⚡ هذا الإداري أصبح المسؤول عن التذكرة
+
+• لا يمكن لأي إداري آخر استلامها
+`)
+.setColor("#22c55e");
+
+interaction.reply({
+embeds: [embed]
+});
+}
+
+// قفل
+if (interaction.customId === "close") {
+
+if (!isStaff(interaction.member) &&
+!isHighStaff(interaction.member)) {
+
+return;
+}
+
+interaction.channel.send(
+"🔒 سيتم إغلاق التذكرة خلال 5 ثواني"
+);
+
+setTimeout(() => {
+claimedTickets.delete(interaction.channel.id);
+interaction.channel.delete().catch(() => {});
+}, 5000);
+
+}
+
+}
+
 });
 
 client.login(TOKEN);
